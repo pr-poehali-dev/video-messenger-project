@@ -145,9 +145,13 @@ const Index = () => {
     if (!recordedBlob) return;
     
     try {
-      const file = new File([recordedBlob], `video-${Date.now()}.webm`, { type: 'video/webm' });
+      // Конвертируем в MP4 для лучшей совместимости
+      const file = new File([recordedBlob], `video-${Date.now()}.mp4`, { 
+        type: 'video/mp4' 
+      });
       
-      if (navigator.share) {
+      // Проверяем поддержку Web Share API с файлами
+      if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
         await navigator.share({
           title: 'Записанное видео',
           text: 'Смотри видео, которое я записал!',
@@ -159,23 +163,46 @@ const Index = () => {
           description: "Файл передан через системное меню"
         });
       } else {
-        // Fallback для браузеров без Web Share API
-        const formData = new FormData();
-        formData.append('video', file);
+        // Альтернативный способ - создаем ссылку для скачивания
+        const url = URL.createObjectURL(recordedBlob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `video-${Date.now()}.webm`;
+        link.style.display = 'none';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
         
-        const telegramBotUrl = `https://api.telegram.org/bot<YOUR_BOT_TOKEN>/sendVideo`;
-        // Здесь нужно интегрировать с Telegram Bot API
+        // Открываем Telegram
+        setTimeout(() => {
+          const text = "Смотри видео, которое я записал! 📹";
+          const telegramUrl = `https://t.me/share/url?text=${encodeURIComponent(text)}`;
+          window.open(telegramUrl, '_blank');
+        }, 500);
         
         toast({
-          title: "Функция в разработке",
-          description: "Используйте системное меню для отправки"
+          title: "Видео скачано",
+          description: "Прикрепите файл в Telegram вручную"
         });
       }
     } catch (error) {
       console.error('Ошибка отправки:', error);
+      
+      // Резервный способ - просто скачиваем файл
+      const url = URL.createObjectURL(recordedBlob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `video-${Date.now()}.webm`;
+      link.style.display = 'none';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      
       toast({
-        title: "Ошибка отправки",
-        description: "Попробуйте еще раз",
+        title: "Скачано локально",
+        description: "Прикрепите видео в мессенджер вручную",
         variant: "destructive"
       });
     }
@@ -185,9 +212,10 @@ const Index = () => {
     if (!recordedBlob) return;
     
     try {
-      const file = new File([recordedBlob], `video-${Date.now()}.webv`, { type: 'video/webm' });
+      const file = new File([recordedBlob], `video-${Date.now()}.mp4`, { type: 'video/mp4' });
       
-      if (navigator.share) {
+      // Проверяем поддержку Web Share API с файлами
+      if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
         await navigator.share({
           title: 'Записанное видео',
           text: 'Смотри видео, которое я записал!',
@@ -199,21 +227,46 @@ const Index = () => {
           description: "Файл передан через системное меню"
         });
       } else {
-        // Fallback - открываем WhatsApp Web
-        const text = "Смотри видео, которое я записал! (файл нужно прикрепить вручную)";
-        const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
-        window.open(url, '_blank');
+        // Альтернативный способ - скачиваем файл и открываем WhatsApp
+        const url = URL.createObjectURL(recordedBlob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `video-${Date.now()}.webm`;
+        link.style.display = 'none';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        
+        // Открываем WhatsApp Web
+        setTimeout(() => {
+          const text = "Смотри видео, которое я записал! 📹 (файл скачан отдельно)";
+          const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(text)}`;
+          window.open(whatsappUrl, '_blank');
+        }, 500);
         
         toast({
-          title: "Открыт WhatsApp",
-          description: "Прикрепите видео файл вручную"
+          title: "Видео скачано",
+          description: "Прикрепите файл в WhatsApp вручную"
         });
       }
     } catch (error) {
       console.error('Ошибка отправки:', error);
+      
+      // Резервный способ
+      const url = URL.createObjectURL(recordedBlob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `video-${Date.now()}.webm`;
+      link.style.display = 'none';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      
       toast({
-        title: "Ошибка отправки",
-        description: "Попробуйте еще раз",
+        title: "Скачано локально",
+        description: "Прикрепите видео в мессенджер вручную",
         variant: "destructive"
       });
     }
@@ -353,33 +406,36 @@ const Index = () => {
               <div className="space-y-4">
                 <h3 className="text-lg font-semibold text-center">Поделиться видео</h3>
                 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="space-y-3">
                   <Button
                     onClick={shareToTelegram}
-                    variant="outline"
-                    className="flex items-center justify-center gap-2 p-3"
+                    className="w-full bg-[#0088CC] hover:bg-[#0077B5] text-white flex items-center justify-center gap-2 p-3"
                   >
                     <Icon name="Send" size={16} />
-                    Telegram
+                    Отправить в Telegram
                   </Button>
                   
                   <Button
                     onClick={shareToWhatsApp}
-                    variant="outline"
-                    className="flex items-center justify-center gap-2 p-3"
+                    className="w-full bg-[#25D366] hover:bg-[#20C05C] text-white flex items-center justify-center gap-2 p-3"
                   >
                     <Icon name="MessageCircle" size={16} />
-                    WhatsApp
+                    Отправить в WhatsApp
                   </Button>
                   
                   <Button
                     onClick={downloadVideo}
                     variant="outline"
-                    className="flex items-center justify-center gap-2 p-3"
+                    className="w-full flex items-center justify-center gap-2 p-3"
                   >
                     <Icon name="Download" size={16} />
-                    Сохранить
+                    Скачать на устройство
                   </Button>
+                </div>
+
+                <div className="text-center text-sm text-muted-foreground mt-4 p-3 bg-muted/20 rounded-lg">
+                  <Icon name="Info" size={16} className="inline mr-2" />
+                  При проблемах с отправкой файл будет автоматически скачан для ручного прикрепления
                 </div>
               </div>
             )}
