@@ -12,6 +12,8 @@ const Index = () => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [recordingTime, setRecordingTime] = useState(0);
   const [recordedVideoUrl, setRecordedVideoUrl] = useState<string | null>(null);
+  const [facingMode, setFacingMode] = useState<'user' | 'environment'>('environment');
+  const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null);
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -25,10 +27,19 @@ const Index = () => {
     return () => clearInterval(interval);
   }, [isRecording]);
 
-  const startCamera = async () => {
+  const startCamera = async (facing = facingMode) => {
     try {
+      // Останавливаем текущий поток если есть
+      if (mediaStream) {
+        mediaStream.getTracks().forEach(track => track.stop());
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: 1280, height: 720 },
+        video: { 
+          width: 1280, 
+          height: 720,
+          facingMode: facing
+        },
         audio: true
       });
       
@@ -71,6 +82,7 @@ const Index = () => {
       const blob = new Blob(recordedChunks, { type: 'video/webm' });
       const url = URL.createObjectURL(blob);
       setRecordedVideoUrl(url);
+      setRecordedBlob(blob);
     };
 
     mediaRecorderRef.current = mediaRecorder;
@@ -118,26 +130,93 @@ const Index = () => {
     }
   };
 
-  const shareToTelegram = () => {
-    const text = "Поделиться видео через Telegram";
-    const url = `https://t.me/share/url?url=${encodeURIComponent(window.location.href)}&text=${encodeURIComponent(text)}`;
-    window.open(url, '_blank');
+  const toggleCamera = async () => {
+    const newFacing = facingMode === 'user' ? 'environment' : 'user';
+    setFacingMode(newFacing);
+    await startCamera(newFacing);
     
     toast({
-      title: "Открыт Telegram",
-      description: "Можете поделиться ссылкой"
+      title: "Камера переключена",
+      description: newFacing === 'environment' ? "Задняя камера" : "Передняя камера"
     });
   };
 
-  const shareToWhatsApp = () => {
-    const text = "Смотри видео, которое я записал!";
-    const url = `https://wa.me/?text=${encodeURIComponent(text + " " + window.location.href)}`;
-    window.open(url, '_blank');
+  const shareToTelegram = async () => {
+    if (!recordedBlob) return;
     
-    toast({
-      title: "Открыт WhatsApp",
-      description: "Можете поделиться ссылкой"
-    });
+    try {
+      const file = new File([recordedBlob], `video-${Date.now()}.webm`, { type: 'video/webm' });
+      
+      if (navigator.share) {
+        await navigator.share({
+          title: 'Записанное видео',
+          text: 'Смотри видео, которое я записал!',
+          files: [file]
+        });
+        
+        toast({
+          title: "Видео отправлено",
+          description: "Файл передан через системное меню"
+        });
+      } else {
+        // Fallback для браузеров без Web Share API
+        const formData = new FormData();
+        formData.append('video', file);
+        
+        const telegramBotUrl = `https://api.telegram.org/bot<YOUR_BOT_TOKEN>/sendVideo`;
+        // Здесь нужно интегрировать с Telegram Bot API
+        
+        toast({
+          title: "Функция в разработке",
+          description: "Используйте системное меню для отправки"
+        });
+      }
+    } catch (error) {
+      console.error('Ошибка отправки:', error);
+      toast({
+        title: "Ошибка отправки",
+        description: "Попробуйте еще раз",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const shareToWhatsApp = async () => {
+    if (!recordedBlob) return;
+    
+    try {
+      const file = new File([recordedBlob], `video-${Date.now()}.webv`, { type: 'video/webm' });
+      
+      if (navigator.share) {
+        await navigator.share({
+          title: 'Записанное видео',
+          text: 'Смотри видео, которое я записал!',
+          files: [file]
+        });
+        
+        toast({
+          title: "Видео отправлено",
+          description: "Файл передан через системное меню"
+        });
+      } else {
+        // Fallback - открываем WhatsApp Web
+        const text = "Смотри видео, которое я записал! (файл нужно прикрепить вручную)";
+        const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
+        window.open(url, '_blank');
+        
+        toast({
+          title: "Открыт WhatsApp",
+          description: "Прикрепите видео файл вручную"
+        });
+      }
+    } catch (error) {
+      console.error('Ошибка отправки:', error);
+      toast({
+        title: "Ошибка отправки",
+        description: "Попробуйте еще раз",
+        variant: "destructive"
+      });
+    }
   };
 
   useEffect(() => {
@@ -216,6 +295,20 @@ const Index = () => {
                   </div>
                 </div>
               )}
+            </div>
+
+            {/* Camera Controls */}
+            <div className="flex justify-center gap-3 mb-4">
+              <Button
+                onClick={toggleCamera}
+                variant="outline"
+                size="sm"
+                disabled={!mediaStream || isRecording}
+                className="flex items-center gap-2"
+              >
+                <Icon name={facingMode === 'environment' ? 'Camera' : 'User'} size={16} />
+                {facingMode === 'environment' ? 'Задняя' : 'Передняя'}
+              </Button>
             </div>
 
             {/* Recording Controls */}
