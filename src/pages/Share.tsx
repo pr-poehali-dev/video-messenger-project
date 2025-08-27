@@ -58,22 +58,26 @@ const Share: React.FC = () => {
     setIsSharing(true);
     
     try {
+      if (!videoBlob) {
+        throw new Error('Видеофайл не найден');
+      }
+
       const message = prepareVideoMessage();
-      const encodedMessage = encodeURIComponent(message);
-      
-      // Определяем платформу
       const isAndroid = /Android/i.test(navigator.userAgent);
       const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
       const isMobile = isAndroid || isIOS;
       
-      if (isMobile && videoBlob && navigator.share) {
-        // Пробуем Web Share API (поддерживается на iOS Safari и Android Chrome)
+      // Создаем файл для отправки
+      const videoFile = new File([videoBlob], `imperia_lead_${Date.now()}.mp4`, {
+        type: videoBlob.type || 'video/mp4'
+      });
+      
+      // Приоритет 1: Web Share API (работает на современных мобильных браузерах)
+      if (navigator.share && navigator.canShare) {
         try {
-          const videoFile = new File([videoBlob], `imperia_lead_${Date.now()}.mp4`, {
-            type: videoBlob.type || 'video/mp4'
-          });
+          const canShareFiles = navigator.canShare({ files: [videoFile] });
           
-          if (navigator.canShare && navigator.canShare({ files: [videoFile] })) {
+          if (canShareFiles) {
             await navigator.share({
               title: '🎥 Новый лид IMPERIA PROMO',
               text: message,
@@ -85,9 +89,30 @@ const Share: React.FC = () => {
               description: "Видео успешно передано в выбранное приложение",
             });
             
-            navigate('/success');
+            setTimeout(() => navigate('/success'), 1000);
             return;
           }
+          } else {
+            // Если нельзя поделиться файлами, просто поделимся текстом
+            await navigator.share({
+              title: '🎥 Новый лид IMPERIA PROMO',
+              text: message
+            });
+            
+            // Показываем инструкцию по скачиванию
+            toast({
+              title: "📩 Скачайте видео",
+              description: "Нажмите 'Скачать' для сохранения видео, затем прикрепите его к сообщению",
+            });
+            
+            // Автоматическое скачивание
+            setTimeout(() => {
+              downloadVideo();
+            }, 1000);
+            
+            return;
+          }
+          
         } catch (shareError: any) {
           console.log('Web Share API ошибка:', shareError);
           if (shareError.name === 'AbortError') {
@@ -96,82 +121,55 @@ const Share: React.FC = () => {
         }
       }
       
-      // Fallback для мобильных устройств
-      if (isMobile) {
-        // Сохраняем видео в localStorage как base64 (для небольших видео)
-        if (videoBlob && videoBlob.size < 10 * 1024 * 1024) { // Меньше 10MB
-          const reader = new FileReader();
-          reader.onload = () => {
-            const base64Video = reader.result as string;
-            sessionStorage.setItem('videoForShare', base64Video);
-            sessionStorage.setItem('shareMessage', message);
-            
-            // Открываем Telegram с сообщением
-            if (isAndroid) {
-              // Android: пробуем нативный Telegram
-              window.location.href = `tg://msg?text=${encodedMessage}`;
-              
-              // Fallback через Telegram Web
-              setTimeout(() => {
-                window.open(`https://t.me/share/url?url=${encodedMessage}`, '_blank');
-              }, 1000);
-              
-            } else if (isIOS) {
-              // iOS: сначала Telegram, затем веб
-              window.location.href = `tg://msg?text=${encodedMessage}`;
-              
-              setTimeout(() => {
-                window.open(`https://t.me/share/url?url=${encodedMessage}`, '_blank');
-              }, 1000);
-            }
-            
-            // Показываем инструкции
-            toast({
-              title: "📱 Инструкция",
-              description: isAndroid 
-                ? "1. В Telegram выберите получателя\n2. Прикрепите видео из галереи\n3. Добавьте сообщение и отправьте"
-                : "1. В Telegram выберите чат\n2. Нажмите 📎 и выберите видео\n3. Добавьте сообщение и отправьте",
-            });
-            
-            setTimeout(() => navigate('/success'), 3000);
-          };
-          reader.readAsDataURL(videoBlob);
-        } else {
-          // Для больших видео просто открываем Telegram с текстом
-          if (isAndroid) {
-            window.location.href = `tg://msg?text=${encodedMessage}`;
-            setTimeout(() => window.open(`https://t.me/share/url?url=${encodedMessage}`, '_blank'), 1000);
-          } else {
-            window.location.href = `tg://msg?text=${encodedMessage}`;
-            setTimeout(() => window.open(`https://t.me/share/url?url=${encodedMessage}`, '_blank'), 1000);
-          }
-          
-          toast({
-            title: "📱 Видео готово к отправке",
-            description: "Прикрепите видео из галереи в Telegram",
-          });
-          
-          setTimeout(() => navigate('/success'), 2000);
-        }
-      } else {
-        // Desktop: Telegram Web
-        window.open(`https://web.telegram.org/a/#?text=${encodedMessage}`, '_blank');
-        
-        toast({
-          title: "💻 Telegram Web",
-          description: "Перетащите видеофайл в окно чата Telegram",
-        });
-        
-        setTimeout(() => navigate('/success'), 2000);
-      }
+      // Приоритет 2: Автоматическое скачивание + открытие мессенджера
+      const encodedMessage = encodeURIComponent(message);
       
-    } catch (error) {
-      console.error('Ошибка отправки:', error);
+      // Скачиваем видео
+      downloadVideo();
+      
+      // Открываем Telegram через короткую задержку
+      setTimeout(() => {
+        if (isMobile) {
+          // Мобильные: нативное приложение
+          window.location.href = `tg://msg?text=${encodedMessage}`;
+          
+          // Fallback на веб-версию
+          setTimeout(() => {
+            window.open(`https://t.me/share/url?url=${encodedMessage}`, '_blank');
+          }, 1500);
+        } else {
+          // Desktop: Telegram Web
+          window.open(`https://web.telegram.org/a/#?text=${encodedMessage}`, '_blank');
+        }
+      }, 2000);
+      
       toast({
-        title: "Ошибка отправки",
-        description: "Не удалось отправить в Telegram",
-        variant: "destructive"
+        title: "📥 Видео скачано!",
+        description: isMobile 
+          ? "Прикрепите скачанный файл в Telegram"
+          : "Перетащите скачанный файл в окно Telegram",
       });
+      
+      setTimeout(() => navigate('/success'), 4000);
+      
+      
+    } catch (error: any) {
+      console.error('Ошибка отправки:', error);
+      
+      // В качестве окончательного fallback скачиваем видео
+      try {
+        downloadVideo();
+        toast({
+          title: "📥 Видео скачано",
+          description: "Откройте Telegram и прикрепите скачанный файл",
+        });
+      } catch (downloadError) {
+        toast({
+          title: "Ошибка",
+          description: "Не удалось отправить или скачать видео",
+          variant: "destructive"
+        });
+      }
     } finally {
       setIsSharing(false);
     }
@@ -181,52 +179,93 @@ const Share: React.FC = () => {
     setIsSharing(true);
     
     try {
+      if (!videoBlob) {
+        throw new Error('Видеофайл не найден');
+      }
+
       const message = prepareVideoMessage();
-      const encodedMessage = encodeURIComponent(message);
-      
       const isAndroid = /Android/i.test(navigator.userAgent);
       const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
       const isMobile = isAndroid || isIOS;
       
-      if (isMobile) {
-        // Нативное приложение WhatsApp
-        if (isAndroid) {
-          window.location.href = `whatsapp://send?text=${encodedMessage}`;
-          // Fallback
-          setTimeout(() => {
-            window.open(`https://wa.me/?text=${encodedMessage}`, '_blank');
-          }, 1000);
-        } else {
-          // iOS
-          window.location.href = `whatsapp://send?text=${encodedMessage}`;
-          setTimeout(() => {
-            window.open(`https://wa.me/?text=${encodedMessage}`, '_blank');
-          }, 1000);
+      // Создаем файл для отправки
+      const videoFile = new File([videoBlob], `imperia_lead_${Date.now()}.mp4`, {
+        type: videoBlob.type || 'video/mp4'
+      });
+      
+      // Приоритет 1: Web Share API
+      if (navigator.share && navigator.canShare) {
+        try {
+          const canShareFiles = navigator.canShare({ files: [videoFile] });
+          
+          if (canShareFiles) {
+            await navigator.share({
+              title: '🎥 Новый лид IMPERIA PROMO',
+              text: message,
+              files: [videoFile]
+            });
+            
+            toast({
+              title: "✅ Видео отправлено",
+              description: "Видео успешно передано в WhatsApp",
+            });
+            
+            setTimeout(() => navigate('/success'), 1000);
+            return;
+          }
+          
+        } catch (shareError: any) {
+          console.log('Web Share API ошибка:', shareError);
+          if (shareError.name === 'AbortError') {
+            return;
+          }
         }
-        
-        toast({
-          title: "💚 WhatsApp",
-          description: "После выбора контакта прикрепите видео",
-        });
-      } else {
-        // Desktop: WhatsApp Web
-        window.open(`https://web.whatsapp.com/send?text=${encodedMessage}`, '_blank');
-        
-        toast({
-          title: "💻 WhatsApp Web",
-          description: "Прикрепите видеофайл к сообщению",
-        });
       }
       
-      setTimeout(() => navigate('/success'), 2000);
+      // Приоритет 2: Скачивание + открытие WhatsApp
+      downloadVideo();
       
-    } catch (error) {
-      console.error('Ошибка отправки WhatsApp:', error);
+      const encodedMessage = encodeURIComponent(message);
+      
+      setTimeout(() => {
+        if (isMobile) {
+          // Мобильные: нативное приложение
+          window.location.href = `whatsapp://send?text=${encodedMessage}`;
+          
+          setTimeout(() => {
+            window.open(`https://wa.me/?text=${encodedMessage}`, '_blank');
+          }, 1500);
+        } else {
+          // Desktop: WhatsApp Web
+          window.open(`https://web.whatsapp.com/send?text=${encodedMessage}`, '_blank');
+        }
+      }, 2000);
+      
       toast({
-        title: "Ошибка",
-        description: "Не удалось отправить в WhatsApp",
-        variant: "destructive"
+        title: "📥 Видео скачано!",
+        description: isMobile 
+          ? "Прикрепите скачанный файл в WhatsApp"
+          : "Перетащите скачанный файл в WhatsApp Web",
       });
+      
+      setTimeout(() => navigate('/success'), 4000);
+      
+    } catch (error: any) {
+      console.error('Ошибка отправки WhatsApp:', error);
+      
+      try {
+        downloadVideo();
+        toast({
+          title: "📥 Видео скачано",
+          description: "Откройте WhatsApp и прикрепите скачанный файл",
+        });
+      } catch (downloadError) {
+        toast({
+          title: "Ошибка",
+          description: "Не удалось отправить в WhatsApp",
+          variant: "destructive"
+        });
+      }
     } finally {
       setIsSharing(false);
     }
@@ -236,41 +275,90 @@ const Share: React.FC = () => {
     setIsSharing(true);
     
     try {
+      if (!videoBlob) {
+        throw new Error('Видеофайл не найден');
+      }
+
       const message = prepareVideoMessage();
-      const encodedMessage = encodeURIComponent(message);
-      
       const isAndroid = /Android/i.test(navigator.userAgent);
       const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
       const isMobile = isAndroid || isIOS;
       
-      if (isMobile) {
-        // Viber deep link
-        window.location.href = `viber://forward?text=${encodedMessage}`;
-        
-        // Fallback для случая, если Viber не установлен
-        setTimeout(() => {
-          toast({
-            title: "💜 Viber",
-            description: "Если Viber не открылся, откройте приложение вручную",
-          });
-        }, 1000);
-      } else {
+      if (!isMobile) {
         toast({
           title: "💜 Viber",
-          description: "Viber недоступен на desktop. Используйте мобильное устройство",
+          description: "Viber работает только на мобильных устройствах",
+          variant: "destructive"
+        });
+        return;
+      }
+      
+      // Создаем файл для отправки
+      const videoFile = new File([videoBlob], `imperia_lead_${Date.now()}.mp4`, {
+        type: videoBlob.type || 'video/mp4'
+      });
+      
+      // Приоритет 1: Web Share API
+      if (navigator.share && navigator.canShare) {
+        try {
+          const canShareFiles = navigator.canShare({ files: [videoFile] });
+          
+          if (canShareFiles) {
+            await navigator.share({
+              title: '🎥 Новый лид IMPERIA PROMO',
+              text: message,
+              files: [videoFile]
+            });
+            
+            toast({
+              title: "✅ Видео отправлено",
+              description: "Видео успешно передано в Viber",
+            });
+            
+            setTimeout(() => navigate('/success'), 1000);
+            return;
+          }
+          
+        } catch (shareError: any) {
+          if (shareError.name === 'AbortError') {
+            return;
+          }
+        }
+      }
+      
+      // Приоритет 2: Скачивание + открытие Viber
+      downloadVideo();
+      
+      const encodedMessage = encodeURIComponent(message);
+      
+      setTimeout(() => {
+        // Viber deep link
+        window.location.href = `viber://forward?text=${encodedMessage}`;
+      }, 2000);
+      
+      toast({
+        title: "📥 Видео скачано!",
+        description: "Прикрепите скачанный файл в Viber",
+      });
+      
+      setTimeout(() => navigate('/success'), 4000);
+      
+    } catch (error: any) {
+      console.error('Ошибка отправки Viber:', error);
+      
+      try {
+        downloadVideo();
+        toast({
+          title: "📥 Видео скачано",
+          description: "Откройте Viber и прикрепите скачанный файл",
+        });
+      } catch (downloadError) {
+        toast({
+          title: "Ошибка",
+          description: "Не удалось отправить в Viber",
           variant: "destructive"
         });
       }
-      
-      setTimeout(() => navigate('/success'), 2000);
-      
-    } catch (error) {
-      console.error('Ошибка отправки Viber:', error);
-      toast({
-        title: "Ошибка",
-        description: "Не удалось отправить в Viber",
-        variant: "destructive"
-      });
     } finally {
       setIsSharing(false);
     }
@@ -282,16 +370,15 @@ const Share: React.FC = () => {
       const a = document.createElement('a');
       a.href = url;
       a.download = `imperia_lead_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.mp4`;
+      a.style.display = 'none';
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
       
-      toast({
-        title: "✅ Видео скачано",
-        description: "Файл сохранен в папку загрузок",
-      });
+      return true;
     }
+    return false;
   };
 
   if (!videoUrl) {
