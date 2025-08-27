@@ -142,131 +142,104 @@ const Index = () => {
   };
 
   const shareToTelegram = async () => {
-    if (!recordedBlob) return;
-    
-    try {
-      // Конвертируем в MP4 для лучшей совместимости
-      const file = new File([recordedBlob], `video-${Date.now()}.mp4`, { 
-        type: 'video/mp4' 
+    if (!recordedBlob) {
+      toast({
+        title: "Ошибка",
+        description: "Нет записанного видео для отправки",
+        variant: "destructive"
       });
-      
-      // Проверяем поддержку Web Share API с файлами
-      if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({
-          title: 'Записанное видео',
-          text: 'Смотри видео, которое я записал!',
-          files: [file]
-        });
-        
-        toast({
-          title: "Видео отправлено",
-          description: "Файл передан через системное меню"
-        });
-      } else {
-        // Альтернативный способ - создаем ссылку для скачивания
-        const url = URL.createObjectURL(recordedBlob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `video-${Date.now()}.webm`;
-        link.style.display = 'none';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-        
-        // Открываем Telegram
-        setTimeout(() => {
-          const text = "Смотри видео, которое я записал! 📹";
-          const telegramUrl = `https://t.me/share/url?text=${encodeURIComponent(text)}`;
-          window.open(telegramUrl, '_blank');
-        }, 500);
-        
-        toast({
-          title: "Видео скачано",
-          description: "Прикрепите файл в Telegram вручную"
-        });
-      }
-    } catch (error) {
-      console.error('Ошибка отправки:', error);
-      
-      // Резервный способ - просто скачиваем файл
+      return;
+    }
+    
+    console.log('Начинаю отправку в Telegram. Размер файла:', recordedBlob.size);
+    
+    // Принудительно скачиваем файл и открываем Telegram
+    try {
       const url = URL.createObjectURL(recordedBlob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `video-${Date.now()}.webm`;
+      link.download = `telegram-video-${Date.now()}.webm`;
       link.style.display = 'none';
+      
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      URL.revokeObjectURL(url);
+      
+      // Очищаем URL через некоторое время
+      setTimeout(() => {
+        URL.revokeObjectURL(url);
+      }, 1000);
+      
+      // Открываем Telegram через небольшую задержку
+      setTimeout(() => {
+        const text = "Смотри видео, которое я записал! 📹\\n\\nФайл скачан на устройство - прикрепи его к сообщению";
+        const telegramUrl = `https://t.me/share/url?text=${encodeURIComponent(text)}`;
+        window.open(telegramUrl, '_blank');
+      }, 800);
       
       toast({
-        title: "Скачано локально",
-        description: "Прикрепите видео в мессенджер вручную",
+        title: "✅ Готово!",
+        description: "Видео скачано. Telegram открыт - прикрепите файл к сообщению"
+      });
+      
+    } catch (error) {
+      console.error('Критическая ошибка отправки:', error);
+      
+      toast({
+        title: "Критическая ошибка",
+        description: "Не удалось подготовить файл для отправки",
         variant: "destructive"
       });
     }
   };
 
   const shareToWhatsApp = async () => {
-    if (!recordedBlob) return;
+    if (!recordedBlob) {
+      toast({
+        title: "Ошибка",
+        description: "Нет записанного видео для отправки",
+        variant: "destructive"
+      });
+      return;
+    }
     
+    console.log('Начинаю отправку в WhatsApp. Размер файла:', recordedBlob.size);
+    
+    // Принудительно скачиваем файл и открываем WhatsApp
     try {
-      const file = new File([recordedBlob], `video-${Date.now()}.mp4`, { type: 'video/mp4' });
-      
-      // Проверяем поддержку Web Share API с файлами
-      if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({
-          title: 'Записанное видео',
-          text: 'Смотри видео, которое я записал!',
-          files: [file]
-        });
-        
-        toast({
-          title: "Видео отправлено",
-          description: "Файл передан через системное меню"
-        });
-      } else {
-        // Альтернативный способ - скачиваем файл и открываем WhatsApp
-        const url = URL.createObjectURL(recordedBlob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `video-${Date.now()}.webm`;
-        link.style.display = 'none';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-        
-        // Открываем WhatsApp Web
-        setTimeout(() => {
-          const text = "Смотри видео, которое я записал! 📹 (файл скачан отдельно)";
-          const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(text)}`;
-          window.open(whatsappUrl, '_blank');
-        }, 500);
-        
-        toast({
-          title: "Видео скачано",
-          description: "Прикрепите файл в WhatsApp вручную"
-        });
-      }
-    } catch (error) {
-      console.error('Ошибка отправки:', error);
-      
-      // Резервный способ
       const url = URL.createObjectURL(recordedBlob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `video-${Date.now()}.webm`;
+      link.download = `whatsapp-video-${Date.now()}.webm`;
       link.style.display = 'none';
+      
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      URL.revokeObjectURL(url);
+      
+      // Очищаем URL через некоторое время
+      setTimeout(() => {
+        URL.revokeObjectURL(url);
+      }, 1000);
+      
+      // Открываем WhatsApp через небольшую задержку
+      setTimeout(() => {
+        const text = "Смотри видео, которое я записал! 📹\\n\\nФайл скачан на устройство - прикрепи его к сообщению";
+        const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(text)}`;
+        window.open(whatsappUrl, '_blank');
+      }, 800);
       
       toast({
-        title: "Скачано локально",
-        description: "Прикрепите видео в мессенджер вручную",
+        title: "✅ Готово!",
+        description: "Видео скачано. WhatsApp открыт - прикрепите файл к сообщению"
+      });
+      
+    } catch (error) {
+      console.error('Критическая ошибка отправки:', error);
+      
+      toast({
+        title: "Критическая ошибка",
+        description: "Не удалось подготовить файл для отправки",
         variant: "destructive"
       });
     }
@@ -435,7 +408,7 @@ const Index = () => {
 
                 <div className="text-center text-sm text-muted-foreground mt-4 p-3 bg-muted/20 rounded-lg">
                   <Icon name="Info" size={16} className="inline mr-2" />
-                  При проблемах с отправкой файл будет автоматически скачан для ручного прикрепления
+                  Файл автоматически скачается на устройство, затем откроется мессенджер для отправки
                 </div>
               </div>
             )}
