@@ -18,8 +18,10 @@ const Home = () => {
           description: "Ваш браузер не поддерживает геолокацию",
           variant: "destructive"
         });
-        // Переходим без геолокации
-        setTimeout(() => navigate('/record'), 2000);
+        // Показываем сообщение вместо перехода
+        setTimeout(() => {
+          alert('Геолокация недоступна, но приложение готово к работе!');
+        }, 2000);
         return;
       }
 
@@ -35,8 +37,10 @@ const Home = () => {
               description: "Разрешите доступ к местоположению в настройках браузера и перезагрузите страницу",
               variant: "destructive"
             });
-            // Переходим без геолокации через 3 секунды
-            setTimeout(() => navigate('/record'), 3000);
+            // Показываем сообщение вместо перехода
+            setTimeout(() => {
+              alert('Разрешите доступ к геолокации в настройках!');
+            }, 3000);
             return;
           }
         } catch (permError) {
@@ -86,8 +90,10 @@ const Home = () => {
         description: `Точность: ${Math.round(position.coords.accuracy)}м. Переходим к записи видео`,
       });
 
-      // Небольшая задержка для показа сообщения
-      setTimeout(() => navigate('/record'), 1000);
+      // Показываем сообщение об успехе
+      setTimeout(() => {
+        alert(`✅ Геолокация получена! Точность: ${Math.round(position.coords.accuracy)}м`);
+      }, 1000);
       
     } catch (error: any) {
       console.error('Ошибка получения геолокации:', error);
@@ -120,9 +126,11 @@ const Home = () => {
         variant: "destructive"
       });
 
-      // Переходим к записи даже без геолокации
+      // Показываем сообщение об ошибке
       if (shouldContinue) {
-        setTimeout(() => navigate('/record'), 2500);
+        setTimeout(() => {
+          alert('Ошибка геолокации, но приложение готово к работе!');
+        }, 2500);
       }
     } finally {
       setIsGettingLocation(false);
