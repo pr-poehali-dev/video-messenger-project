@@ -151,43 +151,78 @@ const Index = () => {
       return;
     }
     
-    console.log('Начинаю отправку в Telegram. Размер файла:', recordedBlob.size);
-    
-    // Принудительно скачиваем файл и открываем Telegram
     try {
-      const url = URL.createObjectURL(recordedBlob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `telegram-video-${Date.now()}.webm`;
-      link.style.display = 'none';
+      const file = new File([recordedBlob], `video_${Date.now()}.mp4`, { type: recordedBlob.type });
       
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      // Геолокация для сообщения
+      const locationData = localStorage.getItem('userLocation');
+      let locationText = '';
+      if (locationData) {
+        try {
+          const location = JSON.parse(locationData);
+          const lat = parseFloat(location.latitude).toFixed(6);
+          const lng = parseFloat(location.longitude).toFixed(6);
+          const mapsUrl = `https://maps.google.com/?q=${lat},${lng}`;
+          locationText = `\n📍 ${lat}, ${lng}\n🗺️ ${mapsUrl}`;
+        } catch (e) {
+          console.error('Ошибка геолокации:', e);
+        }
+      }
       
-      // Очищаем URL через некоторое время
+      const message = `🎥 Новый лид IMPERIA PROMO!\n📅 ${new Date().toLocaleString()}${locationText}`;
+      
+      // Попробуем Web Share API для прямой отправки
+      if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({
+            title: '🎥 Новый лид IMPERIA PROMO',
+            text: message,
+            files: [file]
+          });
+          
+          // Переход на страницу успеха
+          setTimeout(() => {
+            window.location.href = '/success';
+          }, 500);
+          return;
+          
+        } catch (shareError) {
+          console.log('Web Share отменен или не удался:', shareError.name);
+          if (shareError.name === 'AbortError') {
+            return; // Пользователь отменил
+          }
+        }
+      }
+      
+      // Fallback: открытие Telegram с текстом + инструкции
+      const encodedMessage = encodeURIComponent(message);
+      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+      
+      if (isMobile) {
+        // Мобильные: открываем Telegram
+        window.location.href = `tg://msg?text=${encodedMessage}`;
+        
+        // Fallback через веб
+        setTimeout(() => {
+          window.open(`https://t.me/share/url?url=${encodedMessage}`, '_blank');
+        }, 1000);
+        
+        alert('📱 Откроется Telegram\n\n1. Выберите получателя\n2. Нажмите кнопку прикрепления (📎)\n3. Выберите видео из галереи\n4. Отправьте сообщение');
+      } else {
+        // Desktop: Telegram Web
+        window.open(`https://web.telegram.org/a/#?text=${encodedMessage}`, '_blank');
+        alert('💻 Откроется Telegram Web\n\n1. Выберите чат\n2. Перетащите видеофайл в окно чата\n3. Добавьте сообщение как подпись');
+      }
+      
       setTimeout(() => {
-        URL.revokeObjectURL(url);
-      }, 1000);
-      
-      // Открываем Telegram через небольшую задержку
-      setTimeout(() => {
-        const text = "Смотри видео, которое я записал! 📹\\n\\nФайл скачан на устройство - прикрепи его к сообщению";
-        const telegramUrl = `https://t.me/share/url?text=${encodeURIComponent(text)}`;
-        window.open(telegramUrl, '_blank');
-      }, 800);
-      
-      toast({
-        title: "✅ Готово!",
-        description: "Видео скачано. Telegram открыт - прикрепите файл к сообщению"
-      });
+        window.location.href = '/success';
+      }, 2000);
       
     } catch (error) {
-      console.error('Критическая ошибка отправки:', error);
-      
+      console.error('Ошибка отправки:', error);
       toast({
-        title: "Критическая ошибка",
-        description: "Не удалось подготовить файл для отправки",
+        title: "Ошибка",
+        description: "Ошибка при отправке видео. Попробуйте ещё раз",
         variant: "destructive"
       });
     }
